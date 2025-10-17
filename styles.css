@@ -540,9 +540,7 @@ input[type="number"] {
     padding: 6px 12px;
 }
 
-/* Hide JSON import/export and demo buttons */
-#exportJSONBtn,
-#importJSONBtn,
+/* Hide demo buttons only */
 .demo-buttons {
     display: none;
 }
