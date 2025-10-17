@@ -88,10 +88,12 @@
 
             <!-- Save/Load/Export Row -->
             <div class="controls-row export-row">
-                <button id="saveBtn" class="btn btn-save" disabled>💾 Save</button>
-                <button id="loadBtn" class="btn btn-load">📂 Load</button>
+                <button id="saveLocalBtn" class="btn btn-save" disabled>💾 Save Locally</button>
+                <button id="manageSavesBtn" class="btn btn-load">📂 Manage Saves</button>
+                <button id="exportJSONBtn" class="btn btn-secondary" disabled>📤 Export JSON</button>
+                <button id="importJSONBtn" class="btn btn-secondary">📥 Import JSON</button>
                 <input type="file" id="importFile" accept=".json" class="file-input">
-                <button id="exportBtn" class="btn btn-export" disabled>🎥 Export</button>
+                <button id="exportBtn" class="btn btn-export" disabled>🎥 Export Video</button>
                 <div class="demo-buttons">
                     <button id="demo1Btn" class="btn btn-demo">Demo 1</button>
                     <button id="demo2Btn" class="btn btn-demo">Demo 2</button>
@@ -129,6 +131,32 @@
                 <input type="text" id="initialWaypointInput" placeholder="e.g., Start" value="Start">
                 <div class="modal-buttons">
                     <button id="startApp" class="btn btn-success">Start</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Save Manager Modal -->
+        <div id="saveManagerModal" class="modal">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h3>Manage Saves</h3>
+                    <button id="closeSaveManager" class="btn-close">&times;</button>
+                </div>
+                <div class="save-list" id="saveList">
+                    <p class="no-saves">No saved routes yet. Create a route and click "Save Locally" to get started.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Save Name Modal -->
+        <div id="saveNameModal" class="modal">
+            <div class="modal-content">
+                <h3>Save Route</h3>
+                <p>Enter a name for this save:</p>
+                <input type="text" id="saveNameInput" placeholder="e.g., Campus Tour Route">
+                <div class="modal-buttons">
+                    <button id="confirmSaveName" class="btn btn-success">Save</button>
+                    <button id="cancelSaveName" class="btn btn-secondary">Cancel</button>
                 </div>
             </div>
         </div>

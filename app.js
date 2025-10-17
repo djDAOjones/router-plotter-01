@@ -27,8 +27,32 @@ class RoutePlotter {
         this.visitedWaypoints = new Set();  // Track which waypoints have been visited
         this.imageName = null;  // Store image filename
         this.imageData = null;  // Store base64 image data
+        this.db = null;  // IndexedDB database
         
+        this.initDatabase();
         this.showInitialModal();
+    }
+
+    initDatabase() {
+        const request = indexedDB.open('RoutePlotterDB', 1);
+        
+        request.onerror = () => {
+            console.error('Database failed to open');
+        };
+        
+        request.onsuccess = () => {
+            this.db = request.result;
+            console.log('Database opened successfully');
+        };
+        
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('saves')) {
+                const objectStore = db.createObjectStore('saves', { keyPath: 'id', autoIncrement: true });
+                objectStore.createIndex('name', 'name', { unique: false });
+                objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+            }
+        };
     }
 
     showInitialModal() {
@@ -128,12 +152,28 @@ class RoutePlotter {
         document.getElementById('clearBtn').addEventListener('click', () => this.clearAll());
         
         // Save/Load/Export
-        document.getElementById('saveBtn').addEventListener('click', () => this.saveToJSON());
-        document.getElementById('loadBtn').addEventListener('click', () => {
+        document.getElementById('saveLocalBtn').addEventListener('click', () => this.showSaveDialog());
+        document.getElementById('manageSavesBtn').addEventListener('click', () => this.showSaveManager());
+        document.getElementById('exportJSONBtn').addEventListener('click', () => this.exportToJSON());
+        document.getElementById('importJSONBtn').addEventListener('click', () => {
             document.getElementById('importFile').click();
         });
         document.getElementById('importFile').addEventListener('change', (e) => this.handleImport(e));
         document.getElementById('exportBtn').addEventListener('click', () => this.exportVideo());
+        
+        // Save name modal
+        document.getElementById('confirmSaveName').addEventListener('click', () => this.saveLocally());
+        document.getElementById('cancelSaveName').addEventListener('click', () => {
+            document.getElementById('saveNameModal').classList.remove('active');
+        });
+        document.getElementById('saveNameInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.saveLocally();
+        });
+        
+        // Save manager modal
+        document.getElementById('closeSaveManager').addEventListener('click', () => {
+            document.getElementById('saveManagerModal').classList.remove('active');
+        });
         
         // Demo buttons (placeholders for now)
         document.getElementById('demo1Btn').addEventListener('click', () => {
@@ -721,7 +761,8 @@ class RoutePlotter {
         document.getElementById('undoBtn').disabled = !hasPoints;
         document.getElementById('clearBtn').disabled = !hasPoints;
         document.getElementById('newWaypointBtn').disabled = !hasPoints;
-        document.getElementById('saveBtn').disabled = !hasPoints;
+        document.getElementById('saveLocalBtn').disabled = !hasPoints;
+        document.getElementById('exportJSONBtn').disabled = !hasPoints;
         document.getElementById('playPauseBtn').disabled = !canAnimate;
         document.getElementById('resetBtn').disabled = !canAnimate;
         document.getElementById('togglePauseMode').disabled = !canAnimate || this.waypoints.length < 2;
@@ -730,7 +771,230 @@ class RoutePlotter {
         document.getElementById('toggleBeacons').disabled = this.waypoints.length === 0;
     }
 
-    saveToJSON() {
+    showSaveDialog() {
+        const modal = document.getElementById('saveNameModal');
+        const input = document.getElementById('saveNameInput');
+        const timestamp = new Date().toLocaleString();
+        input.value = `Route ${timestamp}`;
+        input.select();
+        modal.classList.add('active');
+    }
+
+    async saveLocally() {
+        if (!this.db) {
+            alert('Database not ready. Please try again.');
+            return;
+        }
+
+        const saveName = document.getElementById('saveNameInput').value.trim();
+        if (!saveName) {
+            alert('Please enter a name for this save');
+            return;
+        }
+
+        const saveData = {
+            name: saveName,
+            timestamp: new Date().toISOString(),
+            imageName: this.imageName,
+            imageData: this.imageData,
+            pathPoints: this.pathPoints,
+            waypoints: this.waypoints,
+            settings: {
+                lineColor: this.lineColor,
+                lineThickness: this.lineThickness,
+                currentSpeedIndex: this.currentSpeedIndex,
+                pauseAtWaypoints: this.pauseAtWaypoints,
+                pauseDuration: this.pauseDuration,
+                showNamesAlways: this.showNamesAlways,
+                showBeacons: this.showBeacons
+            }
+        };
+
+        const transaction = this.db.transaction(['saves'], 'readwrite');
+        const objectStore = transaction.objectStore('saves');
+        const request = objectStore.add(saveData);
+
+        request.onsuccess = () => {
+            document.getElementById('saveNameModal').classList.remove('active');
+            alert('Route saved locally!');
+        };
+
+        request.onerror = () => {
+            alert('Error saving route: ' + request.error);
+        };
+    }
+
+    async showSaveManager() {
+        if (!this.db) {
+            alert('Database not ready. Please try again.');
+            return;
+        }
+
+        const modal = document.getElementById('saveManagerModal');
+        const saveList = document.getElementById('saveList');
+
+        const transaction = this.db.transaction(['saves'], 'readonly');
+        const objectStore = transaction.objectStore('saves');
+        const request = objectStore.getAll();
+
+        request.onsuccess = () => {
+            const saves = request.result;
+            
+            if (saves.length === 0) {
+                saveList.innerHTML = '<p class="no-saves">No saved routes yet. Create a route and click "Save Locally" to get started.</p>';
+            } else {
+                saveList.innerHTML = saves.map(save => {
+                    const date = new Date(save.timestamp).toLocaleString();
+                    const waypointCount = save.waypoints ? save.waypoints.length : 0;
+                    const pointCount = save.pathPoints ? save.pathPoints.length : 0;
+                    
+                    return `
+                        <div class="save-item">
+                            <div class="save-item-info">
+                                <div class="save-item-name">${save.name}</div>
+                                <div class="save-item-meta">
+                                    ${date} • ${waypointCount} waypoints • ${pointCount} points
+                                    ${save.imageName ? ` • ${save.imageName}` : ''}
+                                </div>
+                            </div>
+                            <div class="save-item-actions">
+                                <button class="btn btn-primary" onclick="app.loadSave(${save.id})">Load</button>
+                                <button class="btn btn-danger" onclick="app.deleteSave(${save.id})">Delete</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            modal.classList.add('active');
+        };
+
+        request.onerror = () => {
+            alert('Error loading saves: ' + request.error);
+        };
+    }
+
+    async loadSave(id) {
+        if (!this.db) return;
+
+        const transaction = this.db.transaction(['saves'], 'readonly');
+        const objectStore = transaction.objectStore('saves');
+        const request = objectStore.get(id);
+
+        request.onsuccess = () => {
+            const data = request.result;
+            if (!data) {
+                alert('Save not found');
+                return;
+            }
+
+            // Load all data
+            this.pathPoints = data.pathPoints || [];
+            this.waypoints = data.waypoints || [];
+            
+            // Load settings
+            if (data.settings) {
+                this.lineColor = data.settings.lineColor || this.lineColor;
+                this.lineThickness = data.settings.lineThickness || this.lineThickness;
+                this.currentSpeedIndex = data.settings.currentSpeedIndex !== undefined ? 
+                    data.settings.currentSpeedIndex : this.currentSpeedIndex;
+                this.pauseAtWaypoints = data.settings.pauseAtWaypoints || false;
+                this.pauseDuration = data.settings.pauseDuration || 2;
+                this.showNamesAlways = data.settings.showNamesAlways !== undefined ?
+                    data.settings.showNamesAlways : true;
+                this.showBeacons = data.settings.showBeacons || false;
+                
+                // Update UI controls
+                document.getElementById('lineColor').value = this.lineColor;
+                document.getElementById('lineThickness').value = this.lineThickness;
+                document.getElementById('thicknessValue').textContent = this.lineThickness;
+                document.getElementById('speedSlider').value = this.currentSpeedIndex;
+                document.getElementById('pauseDuration').value = this.pauseDuration;
+                this.updateSpeedDisplay();
+                this.updateToggleButtons();
+            }
+
+            // Load image
+            if (data.imageData) {
+                this.imageName = data.imageName;
+                this.imageData = data.imageData;
+                const img = new Image();
+                img.onload = () => {
+                    this.image = img;
+                    this.setupCanvas();
+                    this.redraw();
+                    document.getElementById('placeholder').classList.add('hidden');
+                    this.updateWaypointList();
+                    this.updateButtonStates();
+                    document.getElementById('saveManagerModal').classList.remove('active');
+                    alert('Route loaded successfully!');
+                };
+                img.src = data.imageData;
+            } else {
+                this.redraw();
+                this.updateWaypointList();
+                this.updateButtonStates();
+                document.getElementById('saveManagerModal').classList.remove('active');
+                alert('Route loaded!\nNote: No image was saved with this route.');
+            }
+        };
+
+        request.onerror = () => {
+            alert('Error loading save: ' + request.error);
+        };
+    }
+
+    async deleteSave(id) {
+        if (!this.db) return;
+        
+        if (!confirm('Are you sure you want to delete this save?')) return;
+
+        const transaction = this.db.transaction(['saves'], 'readwrite');
+        const objectStore = transaction.objectStore('saves');
+        const request = objectStore.delete(id);
+
+        request.onsuccess = () => {
+            this.showSaveManager(); // Refresh the list
+        };
+
+        request.onerror = () => {
+            alert('Error deleting save: ' + request.error);
+        };
+    }
+
+    updateToggleButtons() {
+        // Update pause mode button
+        const pauseBtn = document.getElementById('togglePauseMode');
+        if (this.pauseAtWaypoints) {
+            pauseBtn.classList.add('active');
+            document.getElementById('pauseModeText').textContent = 'Continuous';
+        } else {
+            pauseBtn.classList.remove('active');
+            document.getElementById('pauseModeText').textContent = 'Pause at Waypoints';
+        }
+        
+        // Update names visibility button
+        const namesBtn = document.getElementById('toggleNamesVisibility');
+        if (this.showNamesAlways) {
+            namesBtn.classList.remove('active');
+            document.getElementById('namesVisibilityText').textContent = 'Names: Always';
+        } else {
+            namesBtn.classList.add('active');
+            document.getElementById('namesVisibilityText').textContent = 'Names: On Arrival';
+        }
+        
+        // Update beacons button
+        const beaconsBtn = document.getElementById('toggleBeacons');
+        if (this.showBeacons) {
+            beaconsBtn.classList.add('active');
+            document.getElementById('beaconsText').textContent = 'Beacons: On';
+        } else {
+            beaconsBtn.classList.remove('active');
+            document.getElementById('beaconsText').textContent = 'Beacons: Off';
+        }
+    }
+
+    exportToJSON() {
         const data = {
             imageName: this.imageName,  // Include image reference
             imageData: this.imageData,  // Include base64 image data
@@ -784,36 +1048,7 @@ class RoutePlotter {
                     document.getElementById('speedSlider').value = this.currentSpeedIndex;
                     document.getElementById('pauseDuration').value = this.pauseDuration;
                     this.updateSpeedDisplay();
-                    
-                    // Update pause mode button
-                    const pauseBtn = document.getElementById('togglePauseMode');
-                    if (this.pauseAtWaypoints) {
-                        pauseBtn.classList.add('active');
-                        document.getElementById('pauseModeText').textContent = 'Continuous';
-                    } else {
-                        pauseBtn.classList.remove('active');
-                        document.getElementById('pauseModeText').textContent = 'Pause at Waypoints';
-                    }
-                    
-                    // Update names visibility button
-                    const namesBtn = document.getElementById('toggleNamesVisibility');
-                    if (this.showNamesAlways) {
-                        namesBtn.classList.remove('active');
-                        document.getElementById('namesVisibilityText').textContent = 'Names: Always';
-                    } else {
-                        namesBtn.classList.add('active');
-                        document.getElementById('namesVisibilityText').textContent = 'Names: On Arrival';
-                    }
-                    
-                    // Update beacons button
-                    const beaconsBtn = document.getElementById('toggleBeacons');
-                    if (this.showBeacons) {
-                        beaconsBtn.classList.add('active');
-                        document.getElementById('beaconsText').textContent = 'Beacons: On';
-                    } else {
-                        beaconsBtn.classList.remove('active');
-                        document.getElementById('beaconsText').textContent = 'Beacons: Off';
-                    }
+                    this.updateToggleButtons();
                 }
 
                 // Load image if included in save file
