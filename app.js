@@ -25,6 +25,7 @@ class RoutePlotter {
         this.showBeacons = false;  // Show beacon animations
         this.beacons = [];  // Active beacon animations
         this.visitedWaypoints = new Set();  // Track which waypoints have been visited
+        this.useSmoothing = false;  // Use Catmull-Rom path smoothing
         this.imageName = null;  // Store image filename
         this.imageData = null;  // Store base64 image data
         this.db = null;  // IndexedDB database
@@ -145,6 +146,7 @@ class RoutePlotter {
         // Display options
         document.getElementById('toggleNamesVisibility').addEventListener('click', () => this.toggleNamesVisibility());
         document.getElementById('toggleBeacons').addEventListener('click', () => this.toggleBeacons());
+        document.getElementById('toggleSmoothing').addEventListener('click', () => this.toggleSmoothing());
         
         // Design controls
         document.getElementById('newWaypointBtn').addEventListener('click', () => this.createNewWaypoint());
@@ -321,6 +323,19 @@ class RoutePlotter {
         }
     }
 
+    toggleSmoothing() {
+        this.useSmoothing = !this.useSmoothing;
+        const btn = document.getElementById('toggleSmoothing');
+        if (this.useSmoothing) {
+            btn.classList.add('active');
+            document.getElementById('smoothingText').textContent = 'Smoothing: On';
+        } else {
+            btn.classList.remove('active');
+            document.getElementById('smoothingText').textContent = 'Smoothing: Off';
+        }
+        this.redraw();
+    }
+
     addBeacon(x, y) {
         if (!this.showBeacons) return;
         
@@ -409,18 +424,36 @@ class RoutePlotter {
         const smoothPath = [];
         const pointsPerSegment = 20;  // Interpolate between points
 
-        for (let i = 0; i < this.pathPoints.length - 1; i++) {
-            const p1 = this.pathPoints[i];
-            const p2 = this.pathPoints[i + 1];
+        if (this.useSmoothing) {
+            // Catmull-Rom spline with very subtle smoothing (90% reduced)
+            const tension = 0.01;  // Very low tension for minimal smoothing
+            
+            for (let i = 0; i < this.pathPoints.length - 1; i++) {
+                const p0 = this.pathPoints[Math.max(i - 1, 0)];
+                const p1 = this.pathPoints[i];
+                const p2 = this.pathPoints[i + 1];
+                const p3 = this.pathPoints[Math.min(i + 2, this.pathPoints.length - 1)];
 
-            // Linear interpolation between points (no easing)
-            for (let t = 0; t < pointsPerSegment; t++) {
-                const ratio = t / pointsPerSegment;
-                const point = {
-                    x: p1.x + (p2.x - p1.x) * ratio,
-                    y: p1.y + (p2.y - p1.y) * ratio
-                };
-                smoothPath.push(point);
+                for (let t = 0; t < pointsPerSegment; t++) {
+                    const segment = t / pointsPerSegment;
+                    const point = this.catmullRom(p0, p1, p2, p3, segment, tension);
+                    smoothPath.push(point);
+                }
+            }
+        } else {
+            // Linear interpolation between points (no smoothing)
+            for (let i = 0; i < this.pathPoints.length - 1; i++) {
+                const p1 = this.pathPoints[i];
+                const p2 = this.pathPoints[i + 1];
+
+                for (let t = 0; t < pointsPerSegment; t++) {
+                    const ratio = t / pointsPerSegment;
+                    const point = {
+                        x: p1.x + (p2.x - p1.x) * ratio,
+                        y: p1.y + (p2.y - p1.y) * ratio
+                    };
+                    smoothPath.push(point);
+                }
             }
         }
 
@@ -769,6 +802,7 @@ class RoutePlotter {
         document.getElementById('exportBtn').disabled = !canAnimate;
         document.getElementById('toggleNamesVisibility').disabled = this.waypoints.length === 0;
         document.getElementById('toggleBeacons').disabled = this.waypoints.length === 0;
+        document.getElementById('toggleSmoothing').disabled = !canAnimate;
     }
 
     showSaveDialog() {
@@ -806,7 +840,8 @@ class RoutePlotter {
                 pauseAtWaypoints: this.pauseAtWaypoints,
                 pauseDuration: this.pauseDuration,
                 showNamesAlways: this.showNamesAlways,
-                showBeacons: this.showBeacons
+                showBeacons: this.showBeacons,
+                useSmoothing: this.useSmoothing
             }
         };
 
@@ -903,6 +938,7 @@ class RoutePlotter {
                 this.showNamesAlways = data.settings.showNamesAlways !== undefined ?
                     data.settings.showNamesAlways : true;
                 this.showBeacons = data.settings.showBeacons || false;
+                this.useSmoothing = data.settings.useSmoothing || false;
                 
                 // Update UI controls
                 document.getElementById('lineColor').value = this.lineColor;
@@ -992,6 +1028,16 @@ class RoutePlotter {
             beaconsBtn.classList.remove('active');
             document.getElementById('beaconsText').textContent = 'Beacons: Off';
         }
+        
+        // Update smoothing button
+        const smoothingBtn = document.getElementById('toggleSmoothing');
+        if (this.useSmoothing) {
+            smoothingBtn.classList.add('active');
+            document.getElementById('smoothingText').textContent = 'Smoothing: On';
+        } else {
+            smoothingBtn.classList.remove('active');
+            document.getElementById('smoothingText').textContent = 'Smoothing: Off';
+        }
     }
 
     exportToJSON() {
@@ -1007,7 +1053,8 @@ class RoutePlotter {
                 pauseAtWaypoints: this.pauseAtWaypoints,
                 pauseDuration: this.pauseDuration,
                 showNamesAlways: this.showNamesAlways,
-                showBeacons: this.showBeacons
+                showBeacons: this.showBeacons,
+                useSmoothing: this.useSmoothing
             }
         };
 
@@ -1040,6 +1087,7 @@ class RoutePlotter {
                     this.showNamesAlways = data.settings.showNamesAlways !== undefined ?
                         data.settings.showNamesAlways : true;
                     this.showBeacons = data.settings.showBeacons || false;
+                    this.useSmoothing = data.settings.useSmoothing || false;
                     
                     // Update UI controls
                     document.getElementById('lineColor').value = this.lineColor;

@@ -358,3 +358,29 @@ UI UPDATES:
 - Separate export/import for JSON files
 
 FINAL STATUS: Complete local storage system implemented and ready
+
+[2025-10-17 09:14] Path smoothing toggle added:
+
+NEW FEATURE: OPTIONAL PATH SMOOTHING
+- New toggle button "Smoothing: On/Off" next to Beacons button
+- Uses Catmull-Rom spline interpolation when enabled
+- Very subtle smoothing (90% reduced, tension = 0.01)
+- Creates gentle curves around corners
+- Off by default (maintains straight lines)
+- Enabled only when animation is possible (2+ points)
+
+TECHNICAL DETAILS:
+- Modified createSmoothPath() to support both modes:
+  * Linear interpolation (smoothing off): straight lines between points
+  * Catmull-Rom spline (smoothing on): gentle curves with minimal deviation
+- Tension set to 0.01 (compared to typical 0.5) for 90% reduction
+- Same 20 points per segment for smooth animation in both modes
+- Smoothing state saved in settings (localStorage and JSON export)
+
+USER EXPERIENCE:
+- Toggle instantly updates route visualization
+- Smoothing preserved in saves and exports
+- Minimal visual difference ensures route accuracy
+- Useful for more natural-looking paths without losing precision
+
+FINAL STATUS: Path smoothing toggle implemented and ready for testing
