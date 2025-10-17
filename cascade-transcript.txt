@@ -466,3 +466,42 @@ BENEFITS:
 ✅ Speed independent of route complexity
 
 FINAL STATUS: Constant speed animation with waypoint easing complete
+
+[2025-10-17 13:26] Visual cleanup and improved easing:
+
+VISUAL IMPROVEMENTS:
+1. Removed intermediate path point dots
+   - Only waypoints shown as visual markers
+   - Cleaner, less cluttered interface
+   - Path line connects waypoints smoothly
+   - Intermediate clicks invisible (but still define path)
+
+2. Increased smoothing strength
+   - Changed from 10% (tension 0.01) to 50% (tension 0.5)
+   - More natural curved paths when smoothing enabled
+   - Better visual flow around corners
+   - Standard Catmull-Rom tension for balanced results
+
+3. Improved waypoint easing
+   - Ease in: First 30% of each waypoint-to-waypoint journey
+   - Ease out: Last 30% of each waypoint-to-waypoint journey
+   - Constant speed: Middle 40% of journey
+   - Smooth acceleration from each waypoint
+   - Smooth deceleration to each waypoint
+   - More natural, professional motion
+
+TECHNICAL CHANGES:
+- drawPoints() now only renders waypoints, not path points
+- Catmull-Rom tension increased to 0.5 for visible smoothing
+- Rewrote applyWaypointEasing() for better waypoint detection
+- Easing now based on position between waypoint pairs
+- Quadratic easing in/out for smooth transitions
+
+USER EXPERIENCE:
+✅ Cleaner visual appearance
+✅ Smoother path curves (when enabled)
+✅ Natural acceleration/deceleration at waypoints
+✅ Professional animation quality
+✅ Focus on major waypoints only
+
+FINAL STATUS: Visual cleanup and improved waypoint easing complete

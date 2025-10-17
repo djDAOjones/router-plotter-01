@@ -425,8 +425,8 @@ class RoutePlotter {
         const pointsPerSegment = 20;  // Interpolate between points
 
         if (this.useSmoothing) {
-            // Catmull-Rom spline with very subtle smoothing (90% reduced)
-            const tension = 0.01;  // Very low tension for minimal smoothing
+            // Catmull-Rom spline with 50% smoothing strength
+            const tension = 0.5;  // Standard tension for balanced smoothing
             
             for (let i = 0; i < this.pathPoints.length - 1; i++) {
                 const p0 = this.pathPoints[Math.max(i - 1, 0)];
@@ -517,34 +517,46 @@ class RoutePlotter {
         return { ...path[path.length - 1], progress: 1 };
     }
 
-    // Apply easing at waypoint boundaries
+    // Apply smooth easing between waypoints
     applyWaypointEasing(segmentIndex, t, pathLength) {
         if (this.waypoints.length === 0) return t;
         
-        // Calculate which waypoint segment we're in
-        const pointsPerSegment = 20;  // From createSmoothPath
-        const originalSegment = Math.floor(segmentIndex / pointsPerSegment);
-        const positionInOriginalSegment = (segmentIndex % pointsPerSegment) / pointsPerSegment;
+        const pointsPerSegment = 20;
+        const currentPointIndex = Math.floor(segmentIndex / pointsPerSegment);
         
-        // Check if this original segment starts or ends at a waypoint
-        const startsAtWaypoint = this.waypoints.some(wp => wp.index === originalSegment);
-        const endsAtWaypoint = this.waypoints.some(wp => wp.index === originalSegment + 1);
+        // Find the waypoint segment we're in (between two waypoints)
+        let prevWaypointIndex = -1;
+        let nextWaypointIndex = this.pathPoints.length;
         
-        // Ease in at waypoint start (first 20% of segment)
-        if (startsAtWaypoint && positionInOriginalSegment < 0.2) {
-            const easeProgress = positionInOriginalSegment / 0.2;
-            const eased = easeProgress * easeProgress;  // Ease in quadratic
-            return t * (eased * 0.2 / positionInOriginalSegment);
+        for (const wp of this.waypoints) {
+            if (wp.index <= currentPointIndex) {
+                prevWaypointIndex = wp.index;
+            }
+            if (wp.index > currentPointIndex && nextWaypointIndex === this.pathPoints.length) {
+                nextWaypointIndex = wp.index;
+            }
         }
         
-        // Ease out at waypoint end (last 20% of segment)
-        if (endsAtWaypoint && positionInOriginalSegment > 0.8) {
-            const easeProgress = (positionInOriginalSegment - 0.8) / 0.2;
-            const eased = 1 - (1 - easeProgress) * (1 - easeProgress);  // Ease out quadratic
-            return t * (0.8 + eased * 0.2) / positionInOriginalSegment;
+        // Only apply easing if we're between two waypoints
+        if (prevWaypointIndex >= 0 && nextWaypointIndex < this.pathPoints.length) {
+            const segmentLength = nextWaypointIndex - prevWaypointIndex;
+            const positionInSegment = (currentPointIndex - prevWaypointIndex) / segmentLength;
+            
+            // Ease in (first 30% of journey between waypoints)
+            if (positionInSegment < 0.3) {
+                const easeT = positionInSegment / 0.3;
+                const eased = easeT * easeT;  // Quadratic ease in
+                return t * eased;
+            }
+            // Ease out (last 30% of journey between waypoints)
+            else if (positionInSegment > 0.7) {
+                const easeT = (positionInSegment - 0.7) / 0.3;
+                const eased = 1 - (1 - easeT) * (1 - easeT);  // Quadratic ease out
+                return t * eased;
+            }
         }
         
-        return t;  // No easing in middle sections
+        return t;  // Constant speed in middle section
     }
 
     catmullRom(p0, p1, p2, p3, t, tension) {
@@ -567,22 +579,7 @@ class RoutePlotter {
     }
 
     drawPoints() {
-        // Draw path points (smaller, less prominent)
-        this.pathPoints.forEach((point, index) => {
-            const isWaypoint = this.waypoints.some(wp => wp.index === index);
-            
-            if (!isWaypoint) {
-                // Regular path point
-                this.ctx.fillStyle = this.lineColor;
-                this.ctx.globalAlpha = 0.6;
-                this.ctx.beginPath();
-                this.ctx.arc(point.x, point.y, this.lineThickness * 0.8, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.globalAlpha = 1;
-            }
-        });
-        
-        // Draw waypoints (larger, with labels)
+        // Only draw waypoints (not intermediate path points)
         this.waypoints.forEach(waypoint => {
             const point = this.pathPoints[waypoint.index];
             if (!point) return;
