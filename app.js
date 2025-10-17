@@ -9,6 +9,7 @@ class RoutePlotter {
         this.isAnimating = false;
         this.isPaused = false;
         this.animationProgress = 0;
+        this.currentDistance = 0;  // Current distance traveled in pixels
         this.baseSpeed = 1;  // 1 = 5 seconds to cross full width
         this.speedMultipliers = [0.25, 0.5, 1, 2, 4];
         this.currentSpeedIndex = 2;  // Default to 1x
@@ -470,6 +471,82 @@ class RoutePlotter {
         return totalLength;
     }
 
+    // Build array of cumulative distances for each point in path
+    buildDistanceMap(path) {
+        const distances = [0];
+        let cumulative = 0;
+        
+        for (let i = 1; i < path.length; i++) {
+            const dx = path[i].x - path[i - 1].x;
+            const dy = path[i].y - path[i - 1].y;
+            const segmentLength = Math.sqrt(dx * dx + dy * dy);
+            cumulative += segmentLength;
+            distances.push(cumulative);
+        }
+        
+        return distances;
+    }
+
+    // Find position on path at given distance with easing between waypoints
+    getPositionAtDistance(path, distances, targetDistance) {
+        const totalDistance = distances[distances.length - 1];
+        
+        if (targetDistance <= 0) return { ...path[0], progress: 0 };
+        if (targetDistance >= totalDistance) return { ...path[path.length - 1], progress: 1 };
+        
+        // Find segment containing target distance
+        for (let i = 0; i < distances.length - 1; i++) {
+            if (targetDistance >= distances[i] && targetDistance <= distances[i + 1]) {
+                const segmentStart = distances[i];
+                const segmentEnd = distances[i + 1];
+                const segmentLength = segmentEnd - segmentStart;
+                const distanceInSegment = targetDistance - segmentStart;
+                const t = distanceInSegment / segmentLength;
+                
+                // Apply easing if within waypoint segments
+                const easedT = this.applyWaypointEasing(i, t, path.length);
+                
+                // Interpolate position
+                const x = path[i].x + (path[i + 1].x - path[i].x) * easedT;
+                const y = path[i].y + (path[i + 1].y - path[i].y) * easedT;
+                
+                return { x, y, progress: targetDistance / totalDistance };
+            }
+        }
+        
+        return { ...path[path.length - 1], progress: 1 };
+    }
+
+    // Apply easing at waypoint boundaries
+    applyWaypointEasing(segmentIndex, t, pathLength) {
+        if (this.waypoints.length === 0) return t;
+        
+        // Calculate which waypoint segment we're in
+        const pointsPerSegment = 20;  // From createSmoothPath
+        const originalSegment = Math.floor(segmentIndex / pointsPerSegment);
+        const positionInOriginalSegment = (segmentIndex % pointsPerSegment) / pointsPerSegment;
+        
+        // Check if this original segment starts or ends at a waypoint
+        const startsAtWaypoint = this.waypoints.some(wp => wp.index === originalSegment);
+        const endsAtWaypoint = this.waypoints.some(wp => wp.index === originalSegment + 1);
+        
+        // Ease in at waypoint start (first 20% of segment)
+        if (startsAtWaypoint && positionInOriginalSegment < 0.2) {
+            const easeProgress = positionInOriginalSegment / 0.2;
+            const eased = easeProgress * easeProgress;  // Ease in quadratic
+            return t * (eased * 0.2 / positionInOriginalSegment);
+        }
+        
+        // Ease out at waypoint end (last 20% of segment)
+        if (endsAtWaypoint && positionInOriginalSegment > 0.8) {
+            const easeProgress = (positionInOriginalSegment - 0.8) / 0.2;
+            const eased = 1 - (1 - easeProgress) * (1 - easeProgress);  // Ease out quadratic
+            return t * (0.8 + eased * 0.2) / positionInOriginalSegment;
+        }
+        
+        return t;  // No easing in middle sections
+    }
+
     catmullRom(p0, p1, p2, p3, t, tension) {
         const t2 = t * t;
         const t3 = t2 * t;
@@ -587,6 +664,7 @@ class RoutePlotter {
         this.isAnimating = false;
         this.isPaused = true;  // Set to paused state
         this.animationProgress = 0;
+        this.currentDistance = 0;
         this.currentPauseTime = 0;
         this.isPausingAtWaypoint = false;
         this.visitedWaypoints.clear();
@@ -613,6 +691,10 @@ class RoutePlotter {
         // Update beacon animations
         this.updateBeacons(currentTime);
 
+        const smoothPath = this.createSmoothPath();
+        const distances = this.buildDistanceMap(smoothPath);
+        const totalDistance = distances[distances.length - 1];
+
         // Handle pause at waypoint
         if (this.isPausingAtWaypoint) {
             this.currentPauseTime += deltaTime;
@@ -620,31 +702,36 @@ class RoutePlotter {
                 this.isPausingAtWaypoint = false;
                 this.currentPauseTime = 0;
             }
-            this.drawAnimatedRoute(this.createSmoothPath(), this.animationProgress);
+            // Draw at current position during pause
+            const position = this.getPositionAtDistance(smoothPath, distances, this.currentDistance);
+            this.animationProgress = position.progress;
+            this.drawAnimatedRoute(smoothPath, this.animationProgress);
             requestAnimationFrame((time) => this.animate(time));
             return;
         }
 
-        const smoothPath = this.createSmoothPath();
-        
-        // Calculate speed based on actual path length in pixels
-        const pathLength = this.calculatePathLength(smoothPath);
+        // Calculate constant speed movement
         const basePixelsPerSecond = 200;  // Base speed: 200 pixels per second at 1x
         const speedMultiplier = this.speedMultipliers[this.currentSpeedIndex];
         const pixelsPerSecond = basePixelsPerSecond * speedMultiplier;
         
-        // Calculate how much distance we cover in this frame
+        // Move forward by distance
         const pixelsCovered = pixelsPerSecond * deltaTime;
-        const progressIncrement = pixelsCovered / pathLength;
-        this.animationProgress += progressIncrement;
+        this.currentDistance += pixelsCovered;
 
-        if (this.animationProgress >= 1) {
+        // Check if animation is complete
+        if (this.currentDistance >= totalDistance) {
+            this.currentDistance = totalDistance;
             this.animationProgress = 1;
             this.isAnimating = false;
             this.isPaused = false;
             this.updatePlayPauseButton();
             this.updateButtonStates();
         }
+
+        // Get current position based on distance traveled
+        const position = this.getPositionAtDistance(smoothPath, distances, this.currentDistance);
+        this.animationProgress = position.progress;
 
         // Check if we're at a waypoint
         if (this.waypoints.length > 0) {

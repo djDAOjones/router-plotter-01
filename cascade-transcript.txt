@@ -424,3 +424,45 @@ WORKFLOW:
 - All visual and behavior settings preserved in saves
 
 FINAL STATUS: Smoothing refinement and UI cleanup complete
+
+[2025-10-17 11:23] Constant speed animation with waypoint easing:
+
+MAJOR FIX: TRUE CONSTANT SPEED
+- Replaced progress-based animation with distance-based animation
+- Speed is now truly constant in pixels per second
+- All path segments travel at the same visual speed
+- No more "longer distances travel faster" issue
+
+NEW ANIMATION SYSTEM:
+1. Distance-based tracking:
+   - currentDistance tracks pixels traveled
+   - buildDistanceMap() creates cumulative distance array
+   - getPositionAtDistance() finds exact position at any distance
+
+2. Constant speed calculation:
+   - 200 pixels/second base speed at 1x
+   - Speed multipliers: 0.25x, 0.5x, 1x, 2x, 4x
+   - Movement: distance += pixelsPerSecond × deltaTime
+   - Independent of path segment lengths
+
+3. Waypoint easing:
+   - Ease in: First 20% of journey from waypoint (quadratic)
+   - Ease out: Last 20% of journey to waypoint (quadratic)
+   - Constant speed in middle 60% of segments
+   - Only applied between waypoint pairs
+   - Smooth acceleration/deceleration
+
+TECHNICAL DETAILS:
+- applyWaypointEasing() applies quadratic easing
+- Easing calculated per segment based on waypoint positions
+- Original path points used to determine waypoint segments
+- 20 interpolation points per segment maintained
+
+BENEFITS:
+✅ True constant visual speed
+✅ Smooth acceleration at waypoint starts
+✅ Smooth deceleration at waypoint arrivals
+✅ Natural-feeling motion
+✅ Speed independent of route complexity
+
+FINAL STATUS: Constant speed animation with waypoint easing complete
