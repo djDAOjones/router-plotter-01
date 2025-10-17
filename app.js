@@ -179,16 +179,13 @@ class RoutePlotter {
     }
 
     setupCanvas() {
-        const container = document.getElementById('canvasWrapper');
-        const maxWidth = container.clientWidth;
-        const scale = maxWidth / this.image.width;
-        
+        // Set canvas to actual image dimensions
         this.canvas.width = this.image.width;
         this.canvas.height = this.image.height;
-        this.canvas.style.width = maxWidth + 'px';
-        this.canvas.style.height = (this.image.height * scale) + 'px';
         
-        this.scale = scale;
+        // Let CSS handle the responsive sizing
+        this.canvas.style.width = '';
+        this.canvas.style.height = '';
     }
 
     handleCanvasClick(event) {
@@ -301,8 +298,8 @@ class RoutePlotter {
         // Update existing beacons
         this.beacons = this.beacons.filter(beacon => {
             const elapsed = (currentTime - beacon.startTime) / 1000;  // Convert to seconds
-            beacon.radius = elapsed * 50;  // Expand at 50 pixels per second
-            beacon.opacity = Math.max(0, 1 - elapsed / 2);  // Fade out over 2 seconds
+            beacon.radius = elapsed * 100;  // Expand at 100 pixels per second (doubled)
+            beacon.opacity = Math.max(0, 1 - elapsed / 4);  // Fade out over 4 seconds (doubled duration)
             return beacon.opacity > 0;
         });
     }
@@ -314,11 +311,11 @@ class RoutePlotter {
             this.ctx.save();
             this.ctx.globalAlpha = beacon.opacity;
             this.ctx.strokeStyle = this.lineColor;
-            this.ctx.lineWidth = 2;
+            this.ctx.lineWidth = 6;  // Much bolder (was 2)
             
-            // Draw multiple concentric circles
+            // Draw multiple concentric circles (doubled spacing)
             for (let i = 0; i < 3; i++) {
-                const r = beacon.radius - i * 15;
+                const r = beacon.radius - i * 30;  // Doubled spacing (was 15)
                 if (r > 0) {
                     this.ctx.beginPath();
                     this.ctx.arc(beacon.x, beacon.y, r, 0, Math.PI * 2);
@@ -368,24 +365,35 @@ class RoutePlotter {
         if (this.pathPoints.length < 2) return this.pathPoints;
 
         const smoothPath = [];
-        const tension = 0.1;  // Reduced for minimal smoothing
-        const numSegments = 5;  // Fewer segments for less curvature
+        const pointsPerSegment = 20;  // Interpolate between points
 
         for (let i = 0; i < this.pathPoints.length - 1; i++) {
-            const p0 = this.pathPoints[Math.max(i - 1, 0)];
             const p1 = this.pathPoints[i];
             const p2 = this.pathPoints[i + 1];
-            const p3 = this.pathPoints[Math.min(i + 2, this.pathPoints.length - 1)];
 
-            for (let t = 0; t < numSegments; t++) {
-                const segment = t / numSegments;
-                const point = this.catmullRom(p0, p1, p2, p3, segment, tension);
+            // Linear interpolation between points (no easing)
+            for (let t = 0; t < pointsPerSegment; t++) {
+                const ratio = t / pointsPerSegment;
+                const point = {
+                    x: p1.x + (p2.x - p1.x) * ratio,
+                    y: p1.y + (p2.y - p1.y) * ratio
+                };
                 smoothPath.push(point);
             }
         }
 
         smoothPath.push(this.pathPoints[this.pathPoints.length - 1]);
         return smoothPath;
+    }
+
+    calculatePathLength(path) {
+        let totalLength = 0;
+        for (let i = 0; i < path.length - 1; i++) {
+            const dx = path[i + 1].x - path[i].x;
+            const dy = path[i + 1].y - path[i].y;
+            totalLength += Math.sqrt(dx * dx + dy * dy);
+        }
+        return totalLength;
     }
 
     catmullRom(p0, p1, p2, p3, t, tension) {
@@ -545,16 +553,16 @@ class RoutePlotter {
 
         const smoothPath = this.createSmoothPath();
         
-        // Calculate speed: 5 seconds to traverse full image width at 1x speed
-        // Total path length approximation
-        const imageWidth = this.canvas.width;
-        const baseTimeSeconds = 5;  // 5 seconds at 1x speed
+        // Calculate speed based on actual path length in pixels
+        const pathLength = this.calculatePathLength(smoothPath);
+        const basePixelsPerSecond = 200;  // Base speed: 200 pixels per second at 1x
         const speedMultiplier = this.speedMultipliers[this.currentSpeedIndex];
-        const actualTimeSeconds = baseTimeSeconds / speedMultiplier;
+        const pixelsPerSecond = basePixelsPerSecond * speedMultiplier;
         
-        // Progress per second
-        const progressPerSecond = 1 / actualTimeSeconds;
-        this.animationProgress += progressPerSecond * deltaTime;
+        // Calculate how much distance we cover in this frame
+        const pixelsCovered = pixelsPerSecond * deltaTime;
+        const progressIncrement = pixelsCovered / pathLength;
+        this.animationProgress += progressIncrement;
 
         if (this.animationProgress >= 1) {
             this.animationProgress = 1;
@@ -839,23 +847,40 @@ class RoutePlotter {
                 alert('Video export complete!');
             };
 
-            // Calculate recording duration based on animation time
-            const baseTimeSeconds = 5;
+            // Calculate actual animation duration based on path length
+            const smoothPath = this.createSmoothPath();
+            const pathLength = this.calculatePathLength(smoothPath);
+            const basePixelsPerSecond = 200;
             const speedMultiplier = this.speedMultipliers[this.currentSpeedIndex];
-            const duration = (baseTimeSeconds / speedMultiplier) * 1000;
+            const pixelsPerSecond = basePixelsPerSecond * speedMultiplier;
+            const animationDuration = pathLength / pixelsPerSecond;
             
-            alert(`Recording video... Duration: ${(duration/1000).toFixed(1)}s`);
+            // Add pauses at waypoints if enabled
+            let totalPauses = 0;
+            if (this.pauseAtWaypoints && this.waypoints.length > 0) {
+                totalPauses = this.waypoints.length * this.pauseDuration;
+            }
+            
+            // Total duration: 1s start + animation + pauses + 3s end
+            const totalDuration = (1 + animationDuration + totalPauses + 3) * 1000;
+            
+            alert(`Recording video... Duration: ${(totalDuration/1000).toFixed(1)}s`);
 
             recorder.start();
-            this.resetAnimation();
-            this.togglePlayPause();  // Start playing
-
+            
+            // Wait 1 second before starting animation
             setTimeout(() => {
-                recorder.stop();
+                this.resetAnimation();
+                this.togglePlayPause();  // Start playing
+            }, 1000);
+
+            // Stop recording after total duration
+            setTimeout(() => {
                 if (this.isAnimating) {
                     this.togglePlayPause();  // Stop if still playing
                 }
-            }, duration + 500);  // Add 500ms buffer
+                recorder.stop();
+            }, totalDuration);
         } catch (error) {
             alert('Error exporting video: ' + error.message);
         }
