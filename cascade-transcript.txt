@@ -288,3 +288,26 @@ TECHNICAL CHANGES:
 - Simplified canvas sizing logic
 
 FINAL STATUS: All refinements implemented and ready for testing
+
+[2025-10-17 08:02] Image embedding in save files:
+
+FEATURE IMPLEMENTED:
+- Save files now include base64-encoded image data
+- Loading a saved route automatically restores the image
+- No need to separately upload the image
+- Backwards compatible with old save files (shows message if no image data)
+- Image data stored alongside path points and settings
+
+TECHNICAL CHANGES:
+- Added imageData property to store base64 image
+- Modified handleImageFile() to store image data
+- Updated saveToJSON() to include imageData
+- Enhanced handleImport() to load and render image from data
+- Appropriate user feedback for both new and old file formats
+
+BENEFITS:
+- Self-contained save files
+- Share routes with images included
+- Faster workflow (no need to find original image)
+
+FINAL STATUS: Image embedding feature implemented and tested

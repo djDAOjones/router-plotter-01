@@ -26,6 +26,7 @@ class RoutePlotter {
         this.beacons = [];  // Active beacon animations
         this.visitedWaypoints = new Set();  // Track which waypoints have been visited
         this.imageName = null;  // Store image filename
+        this.imageData = null;  // Store base64 image data
         
         this.showInitialModal();
     }
@@ -165,6 +166,7 @@ class RoutePlotter {
         this.imageName = file.name;  // Store image filename
         const reader = new FileReader();
         reader.onload = (e) => {
+            this.imageData = e.target.result;  // Store base64 image data
             const img = new Image();
             img.onload = () => {
                 this.image = img;
@@ -173,7 +175,7 @@ class RoutePlotter {
                 document.getElementById('placeholder').classList.add('hidden');
                 this.updateButtonStates();
             };
-            img.src = e.target.result;
+            img.src = this.imageData;
         };
         reader.readAsDataURL(file);
     }
@@ -731,6 +733,7 @@ class RoutePlotter {
     saveToJSON() {
         const data = {
             imageName: this.imageName,  // Include image reference
+            imageData: this.imageData,  // Include base64 image data
             pathPoints: this.pathPoints,
             waypoints: this.waypoints,
             settings: {
@@ -762,13 +765,7 @@ class RoutePlotter {
                 this.pathPoints = data.pathPoints || [];
                 this.waypoints = data.waypoints || [];
                 
-                // Note the image reference (for user information)
-                if (data.imageName) {
-                    console.log('Route was created with image:', data.imageName);
-                    // Could display this info to user if needed
-                }
-                
-                // Load settings
+                // Load settings first
                 if (data.settings) {
                     this.lineColor = data.settings.lineColor || this.lineColor;
                     this.lineThickness = data.settings.lineThickness || this.lineThickness;
@@ -819,10 +816,31 @@ class RoutePlotter {
                     }
                 }
 
-                this.redraw();
-                this.updateWaypointList();
-                this.updateButtonStates();
-                alert('Route loaded successfully!');
+                // Load image if included in save file
+                if (data.imageData) {
+                    this.imageName = data.imageName;
+                    this.imageData = data.imageData;
+                    const img = new Image();
+                    img.onload = () => {
+                        this.image = img;
+                        this.setupCanvas();
+                        this.redraw();
+                        document.getElementById('placeholder').classList.add('hidden');
+                        this.updateWaypointList();
+                        this.updateButtonStates();
+                        alert('Route and image loaded successfully!');
+                    };
+                    img.src = data.imageData;
+                } else {
+                    // No image data in file
+                    if (data.imageName) {
+                        console.log('Route was created with image:', data.imageName);
+                    }
+                    this.redraw();
+                    this.updateWaypointList();
+                    this.updateButtonStates();
+                    alert('Route loaded successfully!\nNote: Image not included, please upload the image separately.');
+                }
             } catch (error) {
                 alert('Error loading file: ' + error.message);
             }
