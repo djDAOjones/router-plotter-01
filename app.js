@@ -333,7 +333,7 @@ class RoutePlotter {
             btn.classList.remove('active');
             document.getElementById('smoothingText').textContent = 'Smoothing: Off';
         }
-        this.redraw();
+        // Smoothing only affects playback, not static route display
     }
 
     addBeacon(x, y) {
@@ -401,18 +401,17 @@ class RoutePlotter {
     drawRoute() {
         if (this.pathPoints.length < 2) return;
 
-        const smoothPath = this.createSmoothPath();
-        
+        // Static route always uses straight lines (no smoothing)
         this.ctx.strokeStyle = this.lineColor;
         this.ctx.lineWidth = this.lineThickness;
         this.ctx.lineCap = 'round';
         this.ctx.lineJoin = 'round';
 
         this.ctx.beginPath();
-        this.ctx.moveTo(smoothPath[0].x, smoothPath[0].y);
+        this.ctx.moveTo(this.pathPoints[0].x, this.pathPoints[0].y);
         
-        for (let i = 1; i < smoothPath.length; i++) {
-            this.ctx.lineTo(smoothPath[i].x, smoothPath[i].y);
+        for (let i = 1; i < this.pathPoints.length; i++) {
+            this.ctx.lineTo(this.pathPoints[i].x, this.pathPoints[i].y);
         }
         
         this.ctx.stroke();

@@ -384,3 +384,43 @@ USER EXPERIENCE:
 - Useful for more natural-looking paths without losing precision
 
 FINAL STATUS: Path smoothing toggle implemented and ready for testing
+
+[2025-10-17 10:51] Smoothing refinement and UI cleanup:
+
+FIXES IMPLEMENTED:
+1. SMOOTHING ONLY AT PLAYBACK:
+   - Static route display now always shows straight lines
+   - Smoothing only applied during animation playback
+   - Authored path points remain unchanged
+   - Toggle button works correctly (no redraw needed)
+
+2. ALL SETTINGS SAVED AS ATTRIBUTES:
+   ✓ lineColor
+   ✓ lineThickness
+   ✓ currentSpeedIndex (speed)
+   ✓ pauseAtWaypoints
+   ✓ pauseDuration
+   ✓ showNamesAlways (name display)
+   ✓ showBeacons
+   ✓ useSmoothing
+   - All saved in both local storage and JSON exports
+   - All restored when loading saves
+
+3. UI CLEANUP:
+   - Hidden JSON Export button
+   - Hidden JSON Import button
+   - Hidden all Demo buttons
+   - Cleaner interface focused on local saves
+
+TECHNICAL CHANGES:
+- Modified drawRoute() to always use straight lines (no smoothing)
+- Removed redraw() call from toggleSmoothing()
+- createSmoothPath() only called during animation
+- Added CSS to hide unnecessary buttons
+
+WORKFLOW:
+- Author route with straight lines between points
+- Toggle smoothing on/off affects only playback animation
+- All visual and behavior settings preserved in saves
+
+FINAL STATUS: Smoothing refinement and UI cleanup complete

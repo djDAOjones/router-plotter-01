@@ -540,6 +540,13 @@ input[type="number"] {
     padding: 6px 12px;
 }
 
+/* Hide JSON import/export and demo buttons */
+#exportJSONBtn,
+#importJSONBtn,
+.demo-buttons {
+    display: none;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     header {
