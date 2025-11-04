@@ -1,22 +1,21 @@
-// Catmull-Rom spline implementation
+// Catmull-Rom spline implementation with tension control
 class CatmullRom {
-  static interpolate(p0, p1, p2, p3, t) {
+  static interpolate(p0, p1, p2, p3, t, tension = 0.5) {
     const t2 = t * t;
     const t3 = t2 * t;
     
+    const v0 = { x: (p2.x - p0.x) * tension, y: (p2.y - p0.y) * tension };
+    const v1 = { x: (p3.x - p1.x) * tension, y: (p3.y - p1.y) * tension };
+    
     return {
-      x: 0.5 * ((2 * p1.x) +
-        (-p0.x + p2.x) * t +
-        (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
-        (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
-      y: 0.5 * ((2 * p1.y) +
-        (-p0.y + p2.y) * t +
-        (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
-        (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
+      x: p1.x + v0.x * t + (3 * (p2.x - p1.x) - 2 * v0.x - v1.x) * t2 + 
+         (2 * (p1.x - p2.x) + v0.x + v1.x) * t3,
+      y: p1.y + v0.y * t + (3 * (p2.y - p1.y) - 2 * v0.y - v1.y) * t2 + 
+         (2 * (p1.y - p2.y) + v0.y + v1.y) * t3
     };
   }
   
-  static createPath(waypoints, pointsPerSegment = 30) {
+  static createPath(waypoints, pointsPerSegment = 30, tension = 0.5) {
     if (waypoints.length < 2) return [];
     
     const path = [];
@@ -29,7 +28,7 @@ class CatmullRom {
       
       for (let j = 0; j < pointsPerSegment; j++) {
         const t = j / pointsPerSegment;
-        path.push(CatmullRom.interpolate(p0, p1, p2, p3, t));
+        path.push(CatmullRom.interpolate(p0, p1, p2, p3, t, tension));
       }
     }
     
@@ -50,6 +49,9 @@ class RoutePlotter {
     // Waypoints and path data
     this.waypoints = [];
     this.pathPoints = [];
+    this.selectedWaypoint = null;
+    this.isDragging = false;
+    this.dragOffset = { x: 0, y: 0 };
     
     // Animation state
     this.animationState = {
@@ -58,12 +60,15 @@ class RoutePlotter {
       currentTime: 0, // in milliseconds
       duration: 5000, // default 5 seconds
       speed: 200, // pixels per second
+      mode: 'constant-speed', // or 'constant-time'
+      playbackSpeed: 1 // 0.5, 1, or 2
     };
     
     // Style settings
     this.styles = {
       pathColor: '#FF6B6B',
       pathThickness: 3,
+      pathTension: 0.5, // Catmull-Rom tension
       waypointSize: 8,
       beaconStyle: 'pulse',
       beaconColor: '#FF6B6B'
@@ -96,7 +101,18 @@ class RoutePlotter {
       waypointSize: document.getElementById('waypoint-size'),
       waypointSizeValue: document.getElementById('waypoint-size-value'),
       beaconStyle: document.getElementById('beacon-style'),
-      beaconColor: document.getElementById('beacon-color')
+      beaconColor: document.getElementById('beacon-color'),
+      // New controls
+      animationMode: document.getElementById('animation-mode'),
+      animationSpeed: document.getElementById('animation-speed'),
+      animationSpeedValue: document.getElementById('animation-speed-value'),
+      animationDuration: document.getElementById('animation-duration'),
+      animationDurationValue: document.getElementById('animation-duration-value'),
+      speedControl: document.getElementById('speed-control'),
+      durationControl: document.getElementById('duration-control'),
+      pathTension: document.getElementById('path-tension'),
+      pathTensionValue: document.getElementById('path-tension-value'),
+      waypointList: document.getElementById('waypoint-list')
     };
     
     this.init();
@@ -128,7 +144,10 @@ class RoutePlotter {
   }
   
   setupEventListeners() {
-    // Canvas click for adding waypoints
+    // Canvas events for waypoint interaction
+    this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+    this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+    this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
     this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
     
     // Header controls
@@ -179,23 +198,172 @@ class RoutePlotter {
       }
     });
     
+    // Animation mode toggle
+    this.elements.animationMode.addEventListener('change', (e) => {
+      this.animationState.mode = e.target.value;
+      if (e.target.value === 'constant-speed') {
+        this.elements.speedControl.style.display = 'flex';
+        this.elements.durationControl.style.display = 'none';
+      } else {
+        this.elements.speedControl.style.display = 'none';
+        this.elements.durationControl.style.display = 'flex';
+      }
+      this.calculatePath();
+    });
+    
+    // Animation speed/duration controls
+    this.elements.animationSpeed.addEventListener('input', (e) => {
+      this.animationState.speed = parseInt(e.target.value);
+      this.elements.animationSpeedValue.textContent = e.target.value;
+      if (this.animationState.mode === 'constant-speed') {
+        this.calculatePath();
+      }
+    });
+    
+    this.elements.animationDuration.addEventListener('input', (e) => {
+      this.animationState.duration = parseFloat(e.target.value) * 1000;
+      this.elements.animationDurationValue.textContent = e.target.value + 's';
+      this.updateTimeDisplay();
+    });
+    
+    // Path tension control
+    this.elements.pathTension.addEventListener('input', (e) => {
+      this.styles.pathTension = parseInt(e.target.value) / 100;
+      this.elements.pathTensionValue.textContent = e.target.value + '%';
+      this.calculatePath();
+    });
+    
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        if (this.animationState.isPlaying) {
-          this.pause();
-        } else {
-          this.play();
-        }
+      const nudgeAmount = e.shiftKey ? 0.05 : 0.01; // 5% or 1%
+      const canvasWidth = this.canvas.width;
+      const canvasHeight = this.canvas.height;
+      
+      switch(e.code) {
+        case 'Space':
+          e.preventDefault();
+          if (this.animationState.isPlaying) {
+            this.pause();
+          } else {
+            this.play();
+          }
+          break;
+          
+        case 'KeyJ': // 0.5x speed
+          this.animationState.playbackSpeed = 0.5;
+          break;
+          
+        case 'KeyK': // 1x speed
+          this.animationState.playbackSpeed = 1;
+          break;
+          
+        case 'KeyL': // 2x speed
+          this.animationState.playbackSpeed = 2;
+          break;
+          
+        case 'ArrowLeft':
+          if (this.selectedWaypoint) {
+            e.preventDefault();
+            this.selectedWaypoint.x -= nudgeAmount * canvasWidth;
+            this.calculatePath();
+            this.updateWaypointList();
+          }
+          break;
+          
+        case 'ArrowRight':
+          if (this.selectedWaypoint) {
+            e.preventDefault();
+            this.selectedWaypoint.x += nudgeAmount * canvasWidth;
+            this.calculatePath();
+            this.updateWaypointList();
+          }
+          break;
+          
+        case 'ArrowUp':
+          if (this.selectedWaypoint) {
+            e.preventDefault();
+            this.selectedWaypoint.y -= nudgeAmount * canvasHeight;
+            this.calculatePath();
+            this.updateWaypointList();
+          }
+          break;
+          
+        case 'ArrowDown':
+          if (this.selectedWaypoint) {
+            e.preventDefault();
+            this.selectedWaypoint.y += nudgeAmount * canvasHeight;
+            this.calculatePath();
+            this.updateWaypointList();
+          }
+          break;
+          
+        case 'Escape':
+          if (this.isDragging) {
+            this.isDragging = false;
+            this.canvas.classList.remove('dragging');
+          }
+          this.selectedWaypoint = null;
+          this.updateWaypointList();
+          break;
       }
     });
   }
   
-  handleCanvasClick(event) {
+  handleMouseDown(event) {
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
+    
+    // Check if clicking on existing waypoint
+    const clickedWaypoint = this.findWaypointAt(x, y);
+    
+    if (clickedWaypoint) {
+      this.selectedWaypoint = clickedWaypoint;
+      this.isDragging = true;
+      this.dragOffset.x = x - clickedWaypoint.x;
+      this.dragOffset.y = y - clickedWaypoint.y;
+      this.canvas.classList.add('dragging');
+      this.updateWaypointList();
+      event.preventDefault();
+    }
+  }
+  
+  handleMouseMove(event) {
+    if (this.isDragging && this.selectedWaypoint) {
+      const rect = this.canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      
+      this.selectedWaypoint.x = x - this.dragOffset.x;
+      this.selectedWaypoint.y = y - this.dragOffset.y;
+      
+      this.calculatePath();
+    }
+  }
+  
+  handleMouseUp(event) {
+    if (this.isDragging) {
+      this.isDragging = false;
+      this.canvas.classList.remove('dragging');
+      this.updateWaypointList();
+    }
+  }
+  
+  handleCanvasClick(event) {
+    // Don't add waypoint if we were dragging
+    if (this.isDragging) return;
+    
+    const rect = this.canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    // Check if clicking on existing waypoint for selection
+    const clickedWaypoint = this.findWaypointAt(x, y);
+    if (clickedWaypoint) {
+      this.selectedWaypoint = clickedWaypoint;
+      this.updateWaypointList();
+      return;
+    }
     
     // Determine if major or minor waypoint
     const isMajor = !event.shiftKey;
@@ -205,7 +373,7 @@ class RoutePlotter {
       x,
       y,
       isMajor,
-      id: Date.now()
+      id: Date.now() // Unique ID for list management
     });
     
     // Recalculate path if we have enough waypoints
@@ -213,7 +381,63 @@ class RoutePlotter {
       this.calculatePath();
     }
     
+    this.updateWaypointList();
     console.log(`Added ${isMajor ? 'major' : 'minor'} waypoint at (${x.toFixed(0)}, ${y.toFixed(0)})`);
+  }
+  
+  findWaypointAt(x, y) {
+    const threshold = 10; // pixels
+    return this.waypoints.find(wp => {
+      const dist = Math.sqrt(Math.pow(wp.x - x, 2) + Math.pow(wp.y - y, 2));
+      return dist <= threshold;
+    });
+  }
+  
+  updateWaypointList() {
+    this.elements.waypointList.innerHTML = '';
+    
+    // Only show major waypoints in the list
+    const majorWaypoints = this.waypoints.filter(wp => wp.isMajor);
+    
+    majorWaypoints.forEach((waypoint, index) => {
+      const item = document.createElement('div');
+      item.className = 'waypoint-item';
+      if (waypoint === this.selectedWaypoint) {
+        item.classList.add('selected');
+      }
+      
+      item.innerHTML = `
+        <span class="waypoint-item-handle">☰</span>
+        <span class="waypoint-item-label">Waypoint ${index + 1}</span>
+        <button class="waypoint-item-delete">×</button>
+      `;
+      
+      // Make item clickable for selection
+      item.addEventListener('click', () => {
+        this.selectedWaypoint = waypoint;
+        this.updateWaypointList();
+      });
+      
+      // Delete button
+      item.querySelector('.waypoint-item-delete').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.deleteWaypoint(waypoint);
+      });
+      
+      this.elements.waypointList.appendChild(item);
+    });
+  }
+  
+  deleteWaypoint(waypoint) {
+    const index = this.waypoints.indexOf(waypoint);
+    if (index > -1) {
+      this.waypoints.splice(index, 1);
+      if (this.selectedWaypoint === waypoint) {
+        this.selectedWaypoint = null;
+      }
+      this.calculatePath();
+      this.updateWaypointList();
+    }
   }
   
   calculatePath() {
@@ -224,8 +448,8 @@ class RoutePlotter {
       return;
     }
     
-    // Use Catmull-Rom splines for smooth curves
-    this.pathPoints = CatmullRom.createPath(this.waypoints);
+    // Use Catmull-Rom splines for smooth curves with tension
+    this.pathPoints = CatmullRom.createPath(this.waypoints, 30, this.styles.pathTension);
     
     // Calculate total path length
     let totalLength = 0;
@@ -235,8 +459,11 @@ class RoutePlotter {
       totalLength += Math.sqrt(dx * dx + dy * dy);
     }
     
-    // Calculate duration based on fixed speed
-    this.animationState.duration = (totalLength / this.animationState.speed) * 1000; // Convert to ms
+    // Calculate duration based on animation mode
+    if (this.animationState.mode === 'constant-speed') {
+      this.animationState.duration = (totalLength / this.animationState.speed) * 1000; // Convert to ms
+    }
+    // For constant-time mode, duration is already set by the slider
     
     // Update total time display
     this.updateTimeDisplay();
@@ -276,12 +503,14 @@ class RoutePlotter {
   clearAll() {
     this.waypoints = [];
     this.pathPoints = [];
+    this.selectedWaypoint = null;
     this.animationState.progress = 0;
     this.animationState.currentTime = 0;
-    this.animationState.duration = 5000;
+    this.animationState.duration = 0;
     this.pause();
-    this.elements.timelineSlider.value = 0;
     this.updateTimeDisplay();
+    this.updateWaypointList();
+    console.log('Cleared all waypoints and path');
   }
   
   showSplash() {
@@ -296,6 +525,36 @@ class RoutePlotter {
     }
   }
   
+  animate(currentTime) {
+    if (!this.animationState.isPlaying) return;
+    
+    requestAnimationFrame((time) => this.animate(time));
+    
+    // Calculate delta time with playback speed
+    const deltaTime = (currentTime - this.animationState.lastTime) * this.animationState.playbackSpeed;
+    this.animationState.lastTime = currentTime;
+    
+    // Update progress
+    this.animationState.currentTime += deltaTime;
+    
+    if (this.animationState.currentTime >= this.animationState.duration) {
+      this.animationState.currentTime = this.animationState.duration;
+      this.animationState.progress = 1;
+      this.pause();
+    } else {
+      this.animationState.progress = this.animationState.currentTime / this.animationState.duration;
+    }
+    
+    // Update timeline slider
+    this.elements.timelineSlider.value = this.animationState.progress * 100;
+    
+    // Update time display
+    this.updateTimeDisplay();
+    
+    // Render the current state
+    this.render();
+  }
+  
   updateTimeDisplay() {
     const formatTime = (ms) => {
       const seconds = Math.floor(ms / 1000);
@@ -306,38 +565,6 @@ class RoutePlotter {
     
     this.elements.currentTime.textContent = formatTime(this.animationState.currentTime);
     this.elements.totalTime.textContent = formatTime(this.animationState.duration);
-  }
-  
-  animate() {
-    const now = performance.now();
-    
-    // Update animation state if playing
-    if (this.animationState.isPlaying && this.pathPoints.length > 0) {
-      const deltaTime = now - (this.animationState.lastTime || now);
-      this.animationState.currentTime += deltaTime;
-      
-      if (this.animationState.currentTime >= this.animationState.duration) {
-        this.animationState.currentTime = this.animationState.duration;
-        this.animationState.progress = 1;
-        this.pause();
-      } else {
-        this.animationState.progress = this.animationState.currentTime / this.animationState.duration;
-      }
-      
-      // Update timeline slider
-      this.elements.timelineSlider.value = this.animationState.progress * 100;
-      
-      this.animationState.lastTime = now;
-    }
-    
-    // Update time display
-    this.updateTimeDisplay();
-    
-    // Render
-    this.render();
-    
-    // Continue animation loop
-    requestAnimationFrame(() => this.animate());
   }
   
   render() {
@@ -374,12 +601,16 @@ class RoutePlotter {
     // Draw waypoints (only major ones are visible)
     this.waypoints.forEach(waypoint => {
       if (waypoint.isMajor) {
+        // Highlight selected waypoint
+        const isSelected = waypoint === this.selectedWaypoint;
+        const size = isSelected ? this.styles.waypointSize * 1.3 : this.styles.waypointSize;
+        
         // Major waypoint - filled circle
         this.ctx.beginPath();
         this.ctx.fillStyle = this.styles.pathColor;
-        this.ctx.strokeStyle = 'white';
-        this.ctx.lineWidth = 2;
-        this.ctx.arc(waypoint.x, waypoint.y, this.styles.waypointSize, 0, Math.PI * 2);
+        this.ctx.strokeStyle = isSelected ? '#4a90e2' : 'white';
+        this.ctx.lineWidth = isSelected ? 3 : 2;
+        this.ctx.arc(waypoint.x, waypoint.y, size, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.stroke();
       }

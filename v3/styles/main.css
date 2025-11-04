@@ -52,12 +52,14 @@ body {
 
 /* Sidebar */
 .sidebar {
-  width: 320px;
+  width: 280px;
+  min-width: 280px;
   background: #f8f8f8;
   border-right: 1px solid #e0e0e0;
-  padding: 2rem 1.5rem;
+  padding: 1.5rem;
   overflow-y: auto;
   box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+  flex-shrink: 0;
 }
 
 .control-group {
@@ -116,6 +118,62 @@ body {
   font-size: 0.9rem;
 }
 
+/* Waypoint List */
+.waypoint-list {
+  margin-top: 1rem;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+}
+
+.waypoint-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: move;
+  transition: background 0.2s;
+}
+
+.waypoint-item:hover {
+  background: #f8f8f8;
+}
+
+.waypoint-item.selected {
+  background: #e8f4ff;
+  border-color: #4a90e2;
+}
+
+.waypoint-item.dragging {
+  opacity: 0.5;
+}
+
+.waypoint-item-handle {
+  margin-right: 0.5rem;
+  color: #999;
+}
+
+.waypoint-item-label {
+  flex: 1;
+  font-size: 0.875rem;
+}
+
+.waypoint-item-delete {
+  padding: 0.25rem 0.5rem;
+  background: #ff6b6b;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.waypoint-item-delete:hover {
+  background: #ff5252;
+}
+
 /* Canvas */
 #canvas {
   flex: 1;
@@ -132,7 +190,7 @@ body {
 .controls {
   position: absolute;
   bottom: 0;
-  left: 320px;
+  left: 280px;
   right: 0;
   background: white;
   border-top: 1px solid #e0e0e0;
