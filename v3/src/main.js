@@ -637,31 +637,54 @@ class RoutePlotter {
     // Clear canvas
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     
-    // Draw path (up to current progress)
-    if (this.pathPoints.length > 0) {
-      const pointsToRender = Math.floor(this.pathPoints.length * this.animationState.progress);
+    // Draw path with per-segment styling
+    if (this.pathPoints.length > 0 && this.waypoints.length > 1) {
+      const totalPoints = this.pathPoints.length;
+      const pointsToRender = Math.floor(totalPoints * this.animationState.progress);
       
-      if (pointsToRender > 0) {
-        this.ctx.beginPath();
-        this.ctx.strokeStyle = this.styles.pathColor;
-        this.ctx.lineWidth = this.styles.pathThickness;
+      // Calculate which waypoint each path point belongs to
+      const pointsPerSegment = Math.floor(totalPoints / (this.waypoints.length - 1));
+      
+      for (let i = 1; i < pointsToRender; i++) {
+        const segmentIndex = Math.min(Math.floor(i / pointsPerSegment), this.waypoints.length - 2);
+        const waypoint = this.waypoints[segmentIndex];
+        
+        // Set segment style
+        this.ctx.strokeStyle = waypoint.segmentColor;
+        this.ctx.lineWidth = waypoint.segmentWidth;
         this.ctx.lineCap = 'round';
         this.ctx.lineJoin = 'round';
         
-        this.ctx.moveTo(this.pathPoints[0].x, this.pathPoints[0].y);
+        // Apply line style
+        this.applyLineStyle(waypoint.segmentStyle);
         
-        for (let i = 1; i < pointsToRender; i++) {
-          this.ctx.lineTo(this.pathPoints[i].x, this.pathPoints[i].y);
-        }
-        
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.pathPoints[i - 1].x, this.pathPoints[i - 1].y);
+        this.ctx.lineTo(this.pathPoints[i].x, this.pathPoints[i].y);
         this.ctx.stroke();
-        
-        // Draw beacon at current position
-        if (pointsToRender > 0 && pointsToRender < this.pathPoints.length) {
-          const currentPoint = this.pathPoints[pointsToRender - 1];
-          this.drawBeacon(currentPoint);
-        }
       }
+      
+      // Reset dash
+      this.ctx.setLineDash([]);
+    }
+    
+    // Draw beacons on major waypoints that have been passed
+    if (this.pathPoints.length > 0 && this.styles.beaconStyle !== 'none') {
+      const currentProgress = this.animationState.progress;
+      const totalPoints = this.pathPoints.length;
+      const currentPointIndex = Math.floor(totalPoints * currentProgress);
+      
+      this.waypoints.forEach((waypoint, wpIndex) => {
+        if (waypoint.isMajor) {
+          // Calculate approximate point index for this waypoint
+          const waypointPointIndex = Math.floor((wpIndex / (this.waypoints.length - 1)) * totalPoints);
+          
+          // Show beacon if animation has passed this waypoint
+          if (currentPointIndex >= waypointPointIndex && waypointPointIndex < currentPointIndex + 20) {
+            this.drawBeacon(waypoint);
+          }
+        }
+      });
     }
     
     // Draw waypoints (only major ones are visible)
@@ -673,7 +696,7 @@ class RoutePlotter {
         
         // Major waypoint - filled circle
         this.ctx.beginPath();
-        this.ctx.fillStyle = this.styles.pathColor;
+        this.ctx.fillStyle = waypoint.segmentColor;
         this.ctx.strokeStyle = isSelected ? '#4a90e2' : 'white';
         this.ctx.lineWidth = isSelected ? 3 : 2;
         this.ctx.arc(waypoint.x, waypoint.y, size, 0, Math.PI * 2);
@@ -682,6 +705,25 @@ class RoutePlotter {
       }
       // Minor waypoints are invisible - they just shape the path
     });
+  }
+  
+  applyLineStyle(style) {
+    switch (style) {
+      case 'dotted':
+        this.ctx.setLineDash([2, 6]);
+        break;
+      case 'dashed':
+        this.ctx.setLineDash([10, 5]);
+        break;
+      case 'squiggle':
+        // Approximated with dashed pattern - true squiggle would need complex path manipulation
+        this.ctx.setLineDash([5, 3, 2, 3]);
+        break;
+      case 'solid':
+      default:
+        this.ctx.setLineDash([]);
+        break;
+    }
   }
   
   drawBeacon(point) {
