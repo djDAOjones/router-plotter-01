@@ -23,27 +23,6 @@
       <!-- Sidebar Controls -->
       <aside class="sidebar">
         <div class="control-group">
-          <h3>Animation</h3>
-          <label>
-            <span>Mode</span>
-            <select id="animation-mode">
-              <option value="constant-speed" selected>Constant Speed</option>
-              <option value="constant-time">Constant Time</option>
-            </select>
-          </label>
-          <label id="speed-control">
-            <span>Speed</span>
-            <input type="range" id="animation-speed" min="50" max="500" value="200" step="10">
-            <span id="animation-speed-value">200</span>
-          </label>
-          <label id="duration-control" style="display:none">
-            <span>Duration</span>
-            <input type="range" id="animation-duration" min="1" max="20" value="5" step="0.5">
-            <span id="animation-duration-value">5s</span>
-          </label>
-        </div>
-
-        <div class="control-group">
           <h3>Path Style</h3>
           <label>
             <span>Color</span>
@@ -54,11 +33,6 @@
             <input type="range" id="path-thickness" min="1" max="10" value="3" step="0.5">
             <span id="path-thickness-value">3</span>
           </label>
-          <label>
-            <span>Tension</span>
-            <input type="range" id="path-tension" min="0" max="100" value="75" step="5">
-            <span id="path-tension-value">75%</span>
-          </label>
         </div>
         
         <div class="control-group">
@@ -68,30 +42,6 @@
             <input type="range" id="waypoint-size" min="4" max="16" value="8" step="1">
             <span id="waypoint-size-value">8</span>
           </label>
-          <div id="waypoint-list" class="waypoint-list"></div>
-          
-          <!-- Waypoint editing panel (shown when waypoint selected) -->
-          <div id="waypoint-editor" style="display:none; margin-top: 1rem; padding: 1rem; background: #fff; border-radius: 4px;">
-            <h4 style="margin: 0 0 0.5rem 0; font-size: 0.875rem;">Edit Waypoint</h4>
-            <label>
-              <span>Color</span>
-              <input type="color" id="segment-color" value="#FF6B6B">
-            </label>
-            <label>
-              <span>Width</span>
-              <input type="range" id="segment-width" min="1" max="10" value="3" step="0.5">
-              <span id="segment-width-value">3</span>
-            </label>
-            <label>
-              <span>Style</span>
-              <select id="segment-style">
-                <option value="solid">Solid</option>
-                <option value="dotted">Dotted</option>
-                <option value="dashed">Dashed</option>
-                <option value="squiggle">Squiggle</option>
-              </select>
-            </label>
-          </div>
         </div>
         
         <div class="control-group">

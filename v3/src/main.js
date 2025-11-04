@@ -69,7 +69,7 @@ class RoutePlotter {
     this.styles = {
       pathColor: '#FF6B6B',
       pathThickness: 3,
-      pathTension: 0.5, // Catmull-Rom tension
+      pathTension: 0.75, // Catmull-Rom tension (75% = less smooth)
       waypointSize: 8,
       beaconStyle: 'pulse',
       beaconColor: '#FF6B6B'
@@ -113,7 +113,13 @@ class RoutePlotter {
       durationControl: document.getElementById('duration-control'),
       pathTension: document.getElementById('path-tension'),
       pathTensionValue: document.getElementById('path-tension-value'),
-      waypointList: document.getElementById('waypoint-list')
+      waypointList: document.getElementById('waypoint-list'),
+      // Waypoint editor controls
+      waypointEditor: document.getElementById('waypoint-editor'),
+      segmentColor: document.getElementById('segment-color'),
+      segmentWidth: document.getElementById('segment-width'),
+      segmentWidthValue: document.getElementById('segment-width-value'),
+      segmentStyle: document.getElementById('segment-style')
     };
     
     this.init();
@@ -192,6 +198,29 @@ class RoutePlotter {
     
     this.elements.beaconColor.addEventListener('input', (e) => {
       this.styles.beaconColor = e.target.value;
+    });
+    
+    // Waypoint editor controls
+    this.elements.segmentColor.addEventListener('input', (e) => {
+      if (this.selectedWaypoint) {
+        this.selectedWaypoint.segmentColor = e.target.value;
+        this.calculatePath();
+      }
+    });
+    
+    this.elements.segmentWidth.addEventListener('input', (e) => {
+      if (this.selectedWaypoint) {
+        this.selectedWaypoint.segmentWidth = parseFloat(e.target.value);
+        this.elements.segmentWidthValue.textContent = e.target.value;
+        this.calculatePath();
+      }
+    });
+    
+    this.elements.segmentStyle.addEventListener('change', (e) => {
+      if (this.selectedWaypoint) {
+        this.selectedWaypoint.segmentStyle = e.target.value;
+        this.calculatePath();
+      }
     });
     
     // Splash screen
@@ -308,6 +337,7 @@ class RoutePlotter {
           }
           this.selectedWaypoint = null;
           this.updateWaypointList();
+          this.updateWaypointEditor();
           break;
       }
     });
@@ -371,18 +401,23 @@ class RoutePlotter {
     if (clickedWaypoint) {
       this.selectedWaypoint = clickedWaypoint;
       this.updateWaypointList();
+      this.updateWaypointEditor();
       return;
     }
     
     // Determine if major or minor waypoint
     const isMajor = !event.shiftKey;
     
-    // Add waypoint
+    // Add waypoint with default styling
     this.waypoints.push({
       x,
       y,
       isMajor,
-      id: Date.now() // Unique ID for list management
+      id: Date.now(), // Unique ID for list management
+      // Segment styling (from this waypoint to next)
+      segmentColor: this.styles.pathColor,
+      segmentWidth: this.styles.pathThickness,
+      segmentStyle: 'solid'
     });
     
     // Recalculate path if we have enough waypoints
@@ -425,6 +460,7 @@ class RoutePlotter {
       item.addEventListener('click', () => {
         this.selectedWaypoint = waypoint;
         this.updateWaypointList();
+        this.updateWaypointEditor();
       });
       
       // Delete button
@@ -437,6 +473,20 @@ class RoutePlotter {
     });
   }
   
+  updateWaypointEditor() {
+    if (this.selectedWaypoint) {
+      // Show editor and populate values
+      this.elements.waypointEditor.style.display = 'block';
+      this.elements.segmentColor.value = this.selectedWaypoint.segmentColor;
+      this.elements.segmentWidth.value = this.selectedWaypoint.segmentWidth;
+      this.elements.segmentWidthValue.textContent = this.selectedWaypoint.segmentWidth;
+      this.elements.segmentStyle.value = this.selectedWaypoint.segmentStyle;
+    } else {
+      // Hide editor
+      this.elements.waypointEditor.style.display = 'none';
+    }
+  }
+  
   deleteWaypoint(waypoint) {
     const index = this.waypoints.indexOf(waypoint);
     if (index > -1) {
@@ -446,6 +496,7 @@ class RoutePlotter {
       }
       this.calculatePath();
       this.updateWaypointList();
+      this.updateWaypointEditor();
     }
   }
   
