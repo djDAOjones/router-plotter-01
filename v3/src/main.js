@@ -51,6 +51,7 @@ class RoutePlotter {
     this.pathPoints = [];
     this.selectedWaypoint = null;
     this.isDragging = false;
+    this.hasDragged = false; // Track if mouse actually moved during drag
     this.dragOffset = { x: 0, y: 0 };
     
     // Animation state
@@ -320,6 +321,7 @@ class RoutePlotter {
     if (clickedWaypoint) {
       this.selectedWaypoint = clickedWaypoint;
       this.isDragging = true;
+      this.hasDragged = false; // Reset drag flag
       this.dragOffset.x = x - clickedWaypoint.x;
       this.dragOffset.y = y - clickedWaypoint.y;
       this.canvas.classList.add('dragging');
@@ -336,8 +338,10 @@ class RoutePlotter {
       
       this.selectedWaypoint.x = x - this.dragOffset.x;
       this.selectedWaypoint.y = y - this.dragOffset.y;
+      this.hasDragged = true; // Mark that actual dragging occurred
       
       this.calculatePath();
+      this.render(); // Show the updated position immediately
     }
   }
   
@@ -350,8 +354,11 @@ class RoutePlotter {
   }
   
   handleCanvasClick(event) {
-    // Don't add waypoint if we were dragging
-    if (this.isDragging) return;
+    // Don't add waypoint if we actually dragged
+    if (this.hasDragged) {
+      this.hasDragged = false; // Reset for next time
+      return;
+    }
     
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -382,6 +389,7 @@ class RoutePlotter {
     }
     
     this.updateWaypointList();
+    this.render(); // Immediately show the new waypoint
     console.log(`Added ${isMajor ? 'major' : 'minor'} waypoint at (${x.toFixed(0)}, ${y.toFixed(0)})`);
   }
   
