@@ -132,8 +132,11 @@ class RoutePlotter {
       this.showSplash();
     }
     
-    // Start render loop
-    this.animate();
+    // Initial render
+    this.render();
+    
+    // Start animation loop (runs continuously for rendering)
+    this.startRenderLoop();
     
     console.log('Route Plotter v3 initialized');
   }
@@ -341,7 +344,6 @@ class RoutePlotter {
       this.hasDragged = true; // Mark that actual dragging occurred
       
       this.calculatePath();
-      this.render(); // Show the updated position immediately
     }
   }
   
@@ -389,7 +391,6 @@ class RoutePlotter {
     }
     
     this.updateWaypointList();
-    this.render(); // Immediately show the new waypoint
     console.log(`Added ${isMajor ? 'major' : 'minor'} waypoint at (${x.toFixed(0)}, ${y.toFixed(0)})`);
   }
   
@@ -533,34 +534,40 @@ class RoutePlotter {
     }
   }
   
-  animate(currentTime) {
-    if (!this.animationState.isPlaying) return;
+  startRenderLoop() {
+    // Continuous render loop that always runs
+    const loop = (currentTime) => {
+      requestAnimationFrame(loop);
+      
+      // Update animation if playing
+      if (this.animationState.isPlaying) {
+        // Calculate delta time with playback speed
+        const deltaTime = (currentTime - this.animationState.lastTime) * this.animationState.playbackSpeed;
+        this.animationState.lastTime = currentTime;
+        
+        // Update progress
+        this.animationState.currentTime += deltaTime;
+        
+        if (this.animationState.currentTime >= this.animationState.duration) {
+          this.animationState.currentTime = this.animationState.duration;
+          this.animationState.progress = 1;
+          this.pause();
+        } else {
+          this.animationState.progress = this.animationState.currentTime / this.animationState.duration;
+        }
+        
+        // Update timeline slider
+        this.elements.timelineSlider.value = this.animationState.progress * 100;
+        
+        // Update time display
+        this.updateTimeDisplay();
+      }
+      
+      // Always render (for drag feedback, etc.)
+      this.render();
+    };
     
-    requestAnimationFrame((time) => this.animate(time));
-    
-    // Calculate delta time with playback speed
-    const deltaTime = (currentTime - this.animationState.lastTime) * this.animationState.playbackSpeed;
-    this.animationState.lastTime = currentTime;
-    
-    // Update progress
-    this.animationState.currentTime += deltaTime;
-    
-    if (this.animationState.currentTime >= this.animationState.duration) {
-      this.animationState.currentTime = this.animationState.duration;
-      this.animationState.progress = 1;
-      this.pause();
-    } else {
-      this.animationState.progress = this.animationState.currentTime / this.animationState.duration;
-    }
-    
-    // Update timeline slider
-    this.elements.timelineSlider.value = this.animationState.progress * 100;
-    
-    // Update time display
-    this.updateTimeDisplay();
-    
-    // Render the current state
-    this.render();
+    requestAnimationFrame(loop);
   }
   
   updateTimeDisplay() {
